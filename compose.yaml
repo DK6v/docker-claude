@@ -1,0 +1,26 @@
+services:
+  claude:
+    image: dk6v/claude:${SCRIPT_VERSION}
+    container_name: claude
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - .:/workspace
+      # Claude local persisten files
+      - .config:/home/node
+      # Docker socket for Docker-in-Docker access
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+networks:
+  default:
+    name: docker-internal
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

@@ -1,0 +1,7 @@
+# Cloude configuration files
+.config/*
+!.config/.gitkeep
+.workspace
+
+# Secrets
+.secret
