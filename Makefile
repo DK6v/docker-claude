@@ -19,6 +19,7 @@ SECRET_ARGS = $(shell \
 
 CONTAINER_NAME = claude
 WORKSPACE_FILE = .workspace
+WORKSPACE_ROOT = $(HOME)/repo
 
 .PHONY: build start stop shell root logs clean restart status exec select-workspace wait-ready
 
@@ -28,15 +29,25 @@ build:
 
 # Select workspace only
 select-workspace:
-	@echo "Available workspaces in ~/repo:"
-	@echo ""
-	@ls -d ~/repo/*/ 2>/dev/null | xargs -n 1 basename | awk '{printf "[%d] %s\n", NR, $$0}'; \
+	@echo "Available workspaces in $(WORKSPACE_ROOT):"; \
+	echo ""; \
+	echo "[0] -- enter path manually --"; \
+	ls -d $(WORKSPACE_ROOT)/*/ 2>/dev/null | xargs -n 1 basename | awk '{printf "[%d] %s\n", NR, $$0}'; \
 	echo ""; \
 	read -p "Enter number: " choice; \
-	selected=$$(ls -d ~/repo/*/ 2>/dev/null | xargs -n 1 basename | sed -n "$${choice}p"); \
-	if [ -z "$$selected" ]; then \
-		echo "Invalid selection"; \
-		exit 1; \
+	if [ "$$choice" = "0" ]; then \
+		read -p "Enter path: " selected; \
+		selected="$${selected/#\~/$${HOME}}"; \
+		if [ ! -d "$$selected" ]; then \
+			echo "Error: path '$$selected' does not exist"; \
+			exit 1; \
+		fi; \
+	else \
+		selected=$$(ls -d $(WORKSPACE_ROOT)/*/ 2>/dev/null | xargs -n 1 basename | sed -n "$${choice}p"); \
+		if [ -z "$$selected" ]; then \
+			echo "Invalid selection"; \
+			exit 1; \
+		fi; \
 	fi; \
 	echo "$$selected" > $(WORKSPACE_FILE); \
 	echo "Workspace saved: $$selected"
@@ -44,10 +55,13 @@ select-workspace:
 # Create and start container in background if it doesn't exist
 start:
 	@if [ ! -f $(WORKSPACE_FILE) ]; then \
-		$(MAKE) --no-print-directory select-workspace; \
+		$(MAKE) --no-print-directory select-workspace || exit 1; \
 	fi; \
 	WORKSPACE_DIR=$$(cat $(WORKSPACE_FILE)); \
-	WORKSPACE_PATH=$${HOME}/repo/$$WORKSPACE_DIR; \
+	case "$$WORKSPACE_DIR" in \
+		/*) WORKSPACE_PATH="$$WORKSPACE_DIR" ;; \
+		*)  WORKSPACE_PATH="$(WORKSPACE_ROOT)/$$WORKSPACE_DIR" ;; \
+	esac; \
 	if [ ! -d "$$WORKSPACE_PATH" ]; then \
 		echo "Error: Workspace path $$WORKSPACE_PATH does not exist"; \
 		exit 1; \
