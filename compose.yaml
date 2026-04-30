@@ -8,9 +8,8 @@ services:
     env_file:
       - .env
     volumes:
-      - .:/workspace
       # Claude local persisten files
-      - .config:/home/node
+      - .config:/home/claude
       # Docker socket for Docker-in-Docker access
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /workspace

@@ -18,11 +18,9 @@ RUN apt-get update \
     netcat-openbsd \
     iputils-ping \
     dnsutils \
-   && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://get.docker.com -o get-docker.sh \
- && sh get-docker.sh \
- && rm get-docker.sh
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 
 RUN corepack enable yarn
 
@@ -31,9 +29,8 @@ RUN npm install -g @anthropic-ai/claude-code
 WORKDIR /docker
 ENV PATH=$PATH:/docker
 
-COPY ./entrypoint.sh / 
-RUN chmod +x /entrypoint.sh
+COPY ./*.sh .
+RUN chmod +x *.sh
 
-CMD [ "/bin/bash", "-i" ]
-ENTRYPOINT [ "/entrypoint.sh" ]
-
+CMD [ "sleep", "infinity" ]
+ENTRYPOINT [ "/docker/entrypoint.sh" ]

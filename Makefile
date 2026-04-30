@@ -1,14 +1,18 @@
+.ONESHELL:
+SHELL = /bin/bash
+
 .DEFAULT_GOAL := shell
 
-export UID = $(shell id -u ${USER})
-export GID = $(shell id -g ${USER})
-export DOCKER_GID = $(shell stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "${GID}")
+export HOST_UID = $(shell id -u ${USER})
+export HOST_GID = $(shell id -g ${USER})
+
+export DOCKER_GID = $(shell stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "${HOST_GID}")
 
 # Extract secrets from .secret file (format: KEY=value, lines starting with # are ignored)
 SECRET_ARGS = $(shell \
 	if [ -f .secret ]; then \
 		cat .secret | grep -v '^#' | grep -v '^$$' | while IFS='=' read -r key value; do \
-			printf -- '-e %s=%s ' "$$key" "$$value"; \
+			printf -- '-e %s=%q ' "$$key" "$$value"; \
 		done; \
 	fi \
 )
@@ -16,7 +20,7 @@ SECRET_ARGS = $(shell \
 CONTAINER_NAME = claude
 WORKSPACE_FILE = .workspace
 
-.PHONY: build start stop shell logs clean restart status exec bash select-workspace
+.PHONY: build start stop shell root logs clean restart status exec select-workspace wait-ready
 
 # Build the Docker image
 build:
@@ -52,22 +56,30 @@ start:
 		if [ -n "$$(docker ps -aq -f status=exited -f name=$(CONTAINER_NAME))" ]; then \
 			echo "Starting existing container..."; \
 			docker start $(CONTAINER_NAME); \
-			sleep 2; \
 		else \
 			echo "Creating and starting new container with workspace: $$WORKSPACE_DIR"; \
 			echo "Mounting $$WORKSPACE_PATH to /workspace"; \
 			docker compose run -d --name $(CONTAINER_NAME) \
-				-e UID=$(UID) \
-				-e GID=$(GID) \
+				-e HOST_UID=$(HOST_UID) \
+				-e HOST_GID=$(HOST_GID) \
 				-e DOCKER_GID=$(DOCKER_GID) \
 				$(SECRET_ARGS) \
 				-v $$WORKSPACE_PATH:/workspace \
-				$(shell docker compose config --services | head -1); \
-			sleep 3; \
-		fi \
+				$$(docker compose config --services | head -1); \
+		fi; \
+		$(MAKE) --no-print-directory wait-ready; \
 	else \
 		echo "Container is already running"; \
 	fi
+
+# Wait until entrypoint has finished user setup (up to 15s)
+wait-ready:
+	@echo "Waiting for container to be ready..."; \
+	for i in $$(seq 1 30); do \
+		docker exec $(CONTAINER_NAME) id $(HOST_UID) > /dev/null 2>&1 && echo "Container ready." && exit 0; \
+		sleep 0.5; \
+	done; \
+	echo "Error: container not ready after 15s"; exit 1
 
 # Stop the running container
 stop:
@@ -81,8 +93,13 @@ stop:
 # Open an interactive shell inside the container (auto-starts if needed)
 shell:
 	@$(MAKE) --no-print-directory start
-	@sleep 1
-	docker exec -it --user node $(CONTAINER_NAME) bash -i
+	@USER=$$(docker exec $(CONTAINER_NAME) id -nu $(HOST_UID) 2>/dev/null)
+	docker exec -it --user "$$USER" $(CONTAINER_NAME) bash -i
+
+# Open a root shell inside the container (auto-starts if needed)
+root:
+	@$(MAKE) --no-print-directory start
+	docker exec -it --user root $(CONTAINER_NAME) bash -i
 
 # Follow container logs
 logs:
@@ -106,18 +123,11 @@ status:
 	@docker ps -f name=$(CONTAINER_NAME) --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" || echo "Container not found"
 
 # Execute arbitrary command inside the container
-# Usage: make exec cmd="npm install"
+# Usage: make exec npm install
 exec:
-	@if [ -z "$(cmd)" ]; then \
-		echo "Usage: make exec cmd='your command'"; \
-		exit 1; \
-	fi
 	@$(MAKE) --no-print-directory start
-	@sleep 1
-	docker exec -it --user node $(CONTAINER_NAME) $(cmd)
+	@USER=$$(docker exec $(CONTAINER_NAME) id -nu $(HOST_UID) 2>/dev/null)
+	docker exec -it --user "$$USER" $(CONTAINER_NAME) $(filter-out $@,$(MAKECMDGOALS))
 
-# Open bash shell (fallback to sh if bash not available)
-bash:
-	@$(MAKE) start
-	@sleep 1
-	docker exec -it --user node $(CONTAINER_NAME) /bin/bash || docker exec -it --user node $(CONTAINER_NAME) /bin/sh
+%:
+	@:

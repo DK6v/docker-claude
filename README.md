@@ -21,15 +21,15 @@ First run prompts workspace selection from `~/repo/`. Selection saved to `.works
 |---------|-------------|
 | `make build` | Build the Docker image |
 | `make start` | Start container (prompts workspace selection if not set) |
-| `make shell` | Open interactive shell (auto-starts if needed) — **default** |
-| `make bash` | Open bash shell (falls back to sh) |
+| `make shell` | Open interactive shell as host user (auto-starts if needed) — **default** |
+| `make root` | Open interactive shell as root (auto-starts if needed) |
 | `make stop` | Stop the running container |
 | `make restart` | Full rebuild: stop → clean → build → start |
 | `make clean` | Remove container and clear saved workspace |
 | `make status` | Show container status |
 | `make logs` | Follow container logs |
 | `make select-workspace` | Re-select workspace from `~/repo/` |
-| `make exec cmd="..."` | Run arbitrary command inside container |
+| `make exec <cmd>` | Run command inside container: `make exec ls -al` |
 
 ## Secrets
 
@@ -40,4 +40,5 @@ Create `.secret` with `KEY=value` pairs (lines starting with `#` ignored). Value
 - Workspace selected from `~/repo/` subdirs, saved to `.workspace`
 - Selected workspace mounted at `/workspace` inside container
 - Host UID/GID/DOCKER_GID auto-matched to avoid permission issues
+- Container waits until user setup is complete before allowing shell access
 - Container name: `claude`
